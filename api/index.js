@@ -9,33 +9,23 @@ const app = express();
 // ================= MIDDLEWARE =================
 app.use(
   cors({
-    origin: "*", // production এ চাইলে specific domain দিতে পারো
+    origin: "*",
     credentials: true,
   })
 );
+
 app.use(express.json());
 
-// ================= ROOT =================
+// ================= HEALTH CHECK =================
 app.get("/", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Carrier Code API is live",
-  });
-});
-
-app.get("/health", (req, res) => {
   res.json({
-    status: "OK",
-    time: new Date().toISOString(),
+    success: true,
+    message: "Carrier Code API Running",
   });
 });
 
-// ================= DATABASE =================
-const uri = `mongodb+srv://${encodeURIComponent(
-  process.env.DB_USER
-)}:${encodeURIComponent(
-  process.env.DB_PASSWORD
-)}@cluster0.h6qghpe.mongodb.net/?retryWrites=true&w=majority`;
+// ================= DB CONNECTION =================
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.h6qghpe.mongodb.net/carrierCode?retryWrites=true&w=majority`;
 
 let client;
 let db;
@@ -46,14 +36,11 @@ async function connectDB() {
   if (db) return db;
 
   client = new MongoClient(uri, {
-    serverApi: {
-      version: ServerApiVersion.v1,
-      strict: true,
-      deprecationErrors: true,
-    },
+    serverApi: ServerApiVersion.v1,
   });
 
   await client.connect();
+
   db = client.db("carrierCode");
 
   jobsCollection = db.collection("jobs");
@@ -62,7 +49,7 @@ async function connectDB() {
   return db;
 }
 
-// ================= JOB ROUTES =================
+// ================= JOBS =================
 app.get("/jobs", async (req, res) => {
   try {
     await connectDB();
@@ -72,8 +59,8 @@ app.get("/jobs", async (req, res) => {
 
     const jobs = await jobsCollection.find(query).toArray();
     res.send(jobs);
-  } catch (error) {
-    res.status(500).send({ error: "Failed to get jobs" });
+  } catch (err) {
+    res.status(500).send({ error: "Jobs fetch failed" });
   }
 });
 
@@ -84,7 +71,7 @@ app.get("/jobs/:id", async (req, res) => {
     const id = req.params.id;
 
     if (!ObjectId.isValid(id)) {
-      return res.status(400).send({ message: "Invalid job id" });
+      return res.status(400).send({ message: "Invalid ID" });
     }
 
     const job = await jobsCollection.findOne({
@@ -92,12 +79,12 @@ app.get("/jobs/:id", async (req, res) => {
     });
 
     if (!job) {
-      return res.status(404).send({ message: "Job not found" });
+      return res.status(404).send({ message: "Not found" });
     }
 
     res.send(job);
-  } catch (error) {
-    res.status(500).send({ error: "Failed to get job" });
+  } catch (err) {
+    res.status(500).send({ error: "Job fetch failed" });
   }
 });
 
@@ -107,20 +94,20 @@ app.post("/jobs", async (req, res) => {
 
     const result = await jobsCollection.insertOne(req.body);
     res.send(result);
-  } catch (error) {
-    res.status(500).send({ error: "Failed to create job" });
+  } catch (err) {
+    res.status(500).send({ error: "Job create failed" });
   }
 });
 
-// ================= APPLICATION ROUTES =================
+// ================= APPLICATIONS =================
 app.post("/applications", async (req, res) => {
   try {
     await connectDB();
 
     const result = await applicationCollection.insertOne(req.body);
     res.send(result);
-  } catch (error) {
-    res.status(500).send({ error: "Failed to apply" });
+  } catch (err) {
+    res.status(500).send({ error: "Apply failed" });
   }
 });
 
@@ -131,10 +118,9 @@ app.get("/applications", async (req, res) => {
     const email = req.query.email;
     const query = email ? { applicant: email } : {};
 
-    const applications = await applicationCollection.find(query).toArray();
+    const apps = await applicationCollection.find(query).toArray();
 
-    // join job info
-    for (const item of applications) {
+    for (let item of apps) {
       if (ObjectId.isValid(item.jobId)) {
         const job = await jobsCollection.findOne({
           _id: new ObjectId(item.jobId),
@@ -148,9 +134,9 @@ app.get("/applications", async (req, res) => {
       }
     }
 
-    res.send(applications);
-  } catch (error) {
-    res.status(500).send({ error: "Failed to get applications" });
+    res.send(apps);
+  } catch (err) {
+    res.status(500).send({ error: "Applications fetch failed" });
   }
 });
 
