@@ -9,7 +9,7 @@ const app = express();
 // ================= MIDDLEWARE =================
 app.use(
   cors({
-    origin: "*",
+    origin: "https://carrier-code-8ibn.vercel.app",
     credentials: true,
   })
 );
